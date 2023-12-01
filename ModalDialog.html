@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+  <script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+</head>
+
+<style>
+  #progress {
+    width: 100%;
+  }
+
+  #input {
+    width: 100%;
+  }
+</style>
+
+<body>
+
+  <div>
+    <div><progress id="progress"></progress></div>
+    <div><input type="url" id="input"></div>
+    <div id="links"></div>
+  </div>
+
+</body>
+
+<script>
+  const data = JSON.parse(<?= data ?>);
+  const settings = JSON.parse(<?= settings ?>);
+  const template = JSON.parse(<?= template ?>);
+  (async function(){
+    const progress = document.getElementById('progress');
+    const headers = data.shift();
+    const entries = data.map((row) => {
+      return headers.reduce((value, current, index) => {
+        const fieldCode = settings[current];
+        if (fieldCode) {
+          value[fieldCode] = row[index] || '';
+        }
+        return value;
+      }, {});
+    });
+    const url = await googleScriptRun('createMergedDocument', entries);
+    progress.setAttribute('value', 1);
+    const input = document.getElementById('input');
+    input.value = url;
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.innerText = url;
+    anchor.target = '_blank';
+    const links = document.getElementById('links');
+    links.appendChild(anchor);
+  })();
+  async function googleScriptRun(name, ...args) {
+    return new Promise(function (resolve, reject) {
+      console.log(`Executes the server-side Apps Script function "${name}"`, args);
+      google.script.run
+        .withSuccessHandler(function (...e) {
+          console.log(`The server-side function "${name}" returns successfully.`, e);
+          resolve(...e);
+        }).withFailureHandler(function (...e) {
+          console.log(`The server-side function "${name}" throws an exception.`, e);
+          reject(...e);
+        })[name](...args);
+    });
+  }
+</script>
+
+</html>
