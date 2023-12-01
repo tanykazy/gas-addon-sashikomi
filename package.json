@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "create": "clasp create --type standalone | clasp push"
+    "create": "clasp create --type standalone | clasp push -f"
   },
   "devDependencies": {
     "@google/clasp": "^2.4.2",
