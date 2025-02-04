@@ -270,39 +270,44 @@ function clickMergeButton(event) {
     .build();
 }
 
-function createMergedDocument(entries) {
+function createMergeDocument() {
   const template = DocumentApp.getActiveDocument();
   const document = DocumentApp.create('[Sashikomi]' + template.getName());
+  const url = document.getUrl();
+  document.saveAndClose();
+  return url;
+}
+
+function mergeDocument(url, entry) {
+  const template = DocumentApp.getActiveDocument();
+  const document = DocumentApp.openByUrl(url);
   const documentBody = document.getBody();
   const templateBody = template.getBody();
   // const templateHeader = template.getHeader();
   // const templateFooter = template.getFooter();
   // const templateFootnotes = template.getFootnotes();
-  entries.forEach((entry) => {
-    const body = templateBody.copy();
-    for (const [fieldCode, text] of Object.entries(entry)) {
-      body.replaceText(fieldCode, text);
+  const body = templateBody.copy();
+  for (const [fieldCode, text] of Object.entries(entry)) {
+    body.replaceText(fieldCode, text);
+  }
+  for (let i = 0; i < body.getNumChildren(); i++) {
+    const child = body.getChild(i);
+    switch (child.getType()) {
+      case DocumentApp.ElementType.LIST_ITEM:
+        documentBody.appendListItem(child.asListItem().copy());
+        break;
+      case DocumentApp.ElementType.PARAGRAPH:
+        documentBody.appendParagraph(child.asParagraph().copy());
+        break;
+      case DocumentApp.ElementType.TABLE:
+        documentBody.appendTable(child.asTable().copy());
+        break;
+      default:
+        break;
     }
-    for (let i = 0; i < body.getNumChildren(); i++) {
-      const child = body.getChild(i);
-      switch (child.getType()) {
-        case DocumentApp.ElementType.LIST_ITEM:
-          documentBody.appendListItem(child.asListItem().copy());
-          break;
-        case DocumentApp.ElementType.PARAGRAPH:
-          documentBody.appendParagraph(child.asParagraph().copy());
-          break;
-        case DocumentApp.ElementType.TABLE:
-          documentBody.appendTable(child.asTable().copy());
-          break;
-        default:
-          break;
-      }
-    }
-  });
-  const url = document.getUrl();
+  }
   document.saveAndClose();
-  return url;
+  return;
 }
 
 function merge(template, entries) {
