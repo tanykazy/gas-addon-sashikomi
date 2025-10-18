@@ -1,126 +1,130 @@
 <!DOCTYPE html>
 <html>
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
 
-<head>
-  <base target="_top">
-  <meta charset="utf-8" />
-
-  <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
-  <script type="importmap">
-    {
-      "imports": {
-        "@material/web/": "https://esm.run/@material/web/"
-      }
-    }
-  </script>
-
-  <script type="module">
-    import '@material/web/all.js';
-    import { styles as typescaleStyles } from '@material/web/typography/md-typescale-styles.js';
-    import {
-      LitElement,
-      html,
-      css,
-    } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js';
-
-    document.adoptedStyleSheets.push(typescaleStyles.styleSheet);
-
-    export class SashikomiView extends LitElement {
-      constructor() {
-        super();
-
-        this.data = JSON.parse(<?= data ?>);
-        this.settings = JSON.parse(<?= settings ?>);
-        this.template = JSON.parse(<?= template ?>);
-        this.done = 0;
-        this.progress = 0;
-      }
-
-      static properties = {
-        data: {},
-        settings: {},
-        template: {},
-        progress: {},
-        mergeDocumentUrl: {},
-        done: {},
-      };
-
-      static styles = css`
-        #merge-document-url {
-          width: 100%
+    <link
+      rel="stylesheet"
+      href="https://ssl.gstatic.com/docs/script/css/add-ons1.css"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <script type="importmap">
+      {
+        "imports": {
+          "@material/web/": "https://esm.run/@material/web/"
         }
-      `;
+      }
+    </script>
 
-      render() {
-        return html`
-          ${this.done < this.data.length ? html`
-            <md-linear-progress value="${this.done}" buffer="${this.progress}" max="${this.data.length}"></md-linear-progress>
-          ` : ''}
-          <md-filled-text-field id="merge-document-url" value="${this.mergeDocumentUrl}"></md-filled-text-field>
-          <md-text-button trailing-icon @click="${this.onClickOpen}">
-            Open
-            <svg slot="icon" viewBox="0 0 48 48"><path d="M9 42q-1.2 0-2.1-.9Q6 40.2 6 39V9q0-1.2.9-2.1Q7.8 6 9 6h13.95v3H9v30h30V25.05h3V39q0 1.2-.9 2.1-.9.9-2.1.9Zm10.1-10.95L17 28.9 36.9 9H25.95V6H42v16.05h-3v-10.9Z"/></svg>
-          </md-text-button>
+    <script type="module">
+      import '@material/web/all.js';
+      import { styles as typescaleStyles } from '@material/web/typography/md-typescale-styles.js';
+      import {
+        LitElement,
+        html,
+        css,
+      } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js';
+
+      document.adoptedStyleSheets.push(typescaleStyles.styleSheet);
+
+      export class SashikomiView extends LitElement {
+        constructor() {
+          super();
+
+          this.data = JSON.parse(<?= data ?>);
+          this.settings = JSON.parse(<?= settings ?>);
+          this.template = JSON.parse(<?= template ?>);
+          this.done = 0;
+          this.progress = 0;
+        }
+
+        static properties = {
+          data: {},
+          settings: {},
+          template: {},
+          progress: {},
+          mergeDocumentUrl: {},
+          done: {},
+        };
+
+        static styles = css`
+          #merge-document-url {
+            width: 100%
+          }
         `;
-      }
 
-      async connectedCallback() {
-        super.connectedCallback();
+        render() {
+          return html`
+            ${this.done < this.data.length ? html`
+              <md-linear-progress value="${this.done}" buffer="${this.progress}" max="${this.data.length}"></md-linear-progress>
+            ` : ''}
+            <md-filled-text-field id="merge-document-url" value="${this.mergeDocumentUrl}"></md-filled-text-field>
+            <md-text-button trailing-icon @click="${this.onClickOpen}">
+              Open
+              <svg slot="icon" viewBox="0 0 48 48"><path d="M9 42q-1.2 0-2.1-.9Q6 40.2 6 39V9q0-1.2.9-2.1Q7.8 6 9 6h13.95v3H9v30h30V25.05h3V39q0 1.2-.9 2.1-.9.9-2.1.9Zm10.1-10.95L17 28.9 36.9 9H25.95V6H42v16.05h-3v-10.9Z"/></svg>
+            </md-text-button>
+          `;
+        }
 
-        this.mergeDocumentUrl = await googleScriptRun('createMergeDocument');
+        async connectedCallback() {
+          super.connectedCallback();
 
-        const headers = this.data.shift();
+          this.mergeDocumentUrl = await googleScriptRun('createMergeDocument');
 
-        for (let i = 0; i < this.data.length; i++) {
-          this.progress = i + 1;
-          const entry = headers.reduce((value, current, index) => {
-            const fieldCode = this.settings[current];
-            if (fieldCode) {
-              value[fieldCode] = this.data[i][index] || '';
-            }
-            return value;
-          }, {});
-          await googleScriptRun('mergeDocument', this.mergeDocumentUrl, entry);
-          this.done = this.progress;
+          const headers = this.data.shift();
+
+          for (let i = 0; i < this.data.length; i++) {
+            this.progress = i + 1;
+            const entry = headers.reduce((value, current, index) => {
+              const fieldCode = this.settings[current];
+              if (fieldCode) {
+                value[fieldCode] = this.data[i][index] || '';
+              }
+              return value;
+            }, {});
+            await googleScriptRun('mergeDocument', this.mergeDocumentUrl, entry);
+            this.done = this.progress;
+          }
+        }
+
+        onClickOpen() {
+          window.open(this.mergeDocumentUrl);
         }
       }
+      customElements.define('sashikomi-view', SashikomiView);
 
-      onClickOpen() {
-        window.open(this.mergeDocumentUrl);
+      function googleScriptRun(name, ...args) {
+        return new Promise(function (resolve, reject) {
+          console.log(
+            `Executes the server-side Apps Script function "${name}"`,
+            args
+          );
+          google.script.run
+            .withSuccessHandler(function (...e) {
+              console.log(
+                `The server-side function "${name}" returns successfully.`,
+                e
+              );
+              resolve(...e);
+            })
+            .withFailureHandler(function (...e) {
+              console.log(
+                `The server-side function "${name}" throws an exception.`,
+                e
+              );
+              reject(...e);
+            })
+          [name](...args);
+        });
       }
-    }
-    customElements.define('sashikomi-view', SashikomiView);
+    </script>
+  </head>
 
-    function googleScriptRun(name, ...args) {
-      return new Promise(function (resolve, reject) {
-        console.log(
-          `Executes the server-side Apps Script function "${name}"`,
-          args
-        );
-        google.script.run
-          .withSuccessHandler(function (...e) {
-            console.log(
-              `The server-side function "${name}" returns successfully.`,
-              e
-            );
-            resolve(...e);
-          })
-          .withFailureHandler(function (...e) {
-            console.log(
-              `The server-side function "${name}" throws an exception.`,
-              e
-            );
-            reject(...e);
-          })
-        [name](...args);
-      });
-    }
-  </script>
-</head>
-
-<body>
-  <sashikomi-view></sashikomi-view>
-</body>
-
+  <body>
+    <sashikomi-view></sashikomi-view>
+  </body>
 </html>

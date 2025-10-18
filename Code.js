@@ -1,17 +1,21 @@
+/**
+ * @OnlyCurrentDoc
+ */
+
+
 function onHomepage(event) {
-  return createHomeCard();
+  return createHomeCard_();
 }
 
-function createHomeCard(parameters = {
+function createHomeCard_(parameters = {
   items: items = '[]',
   token: null
 }) {
-  const files = parameters['token'] ? DriveApp.continueFileIterator(parameters['token']) : DriveApp.getFilesByType(MimeType.GOOGLE_SHEETS);
   const items = JSON.parse(parameters['items']);
   const grid = CardService.newGrid()
     .setNumColumns(1)
     .setOnClickAction(CardService.newAction()
-      .setFunctionName('clickSpreadsheetList')
+      .setFunctionName(clickSpreadsheetList_.name)
       .setLoadIndicator(CardService.LoadIndicator.SPINNER))
     .setBorderStyle(CardService.newBorderStyle()
       .setType(CardService.BorderType.NO_BORDER));
@@ -21,26 +25,21 @@ function createHomeCard(parameters = {
       .setTitle(items[i].title)
       .setSubtitle(items[i].subtitle));
   }
-  let count = 0;
-  while (files.hasNext()) {
-    if (count < 5) {
-      const file = files.next();
-      const date = file.getLastUpdated();
-      const user = file.getOwner();
-      const item = {
-        id: file.getId(),
-        title: file.getName(),
-        subtitle: `${date.toLocaleDateString()} ${date.toLocaleTimeString()} ${user && user.getName() || ''}`
-      };
-      items.push(item);
-      grid.addItem(CardService.newGridItem()
-        .setIdentifier(item.id)
-        .setTitle(item.title)
-        .setSubtitle(item.subtitle));
-    } else {
-      break;
-    }
-    count++;
+  const recent = getRecentSpreadsheets_(parameters['token']);
+  for (const file of recent.files) {
+    const f = DriveApp.getFileById(file.id);
+    const date = f.getLastUpdated();
+    const user = f.getOwner();
+    const item = {
+      id: file.id,
+      title: file.name,
+      subtitle: `${date.toLocaleDateString()} ${date.toLocaleTimeString()} ${user && user.getName() || ''}`
+    };
+    items.push(item);
+    grid.addItem(CardService.newGridItem()
+      .setIdentifier(item.id)
+      .setTitle(item.title)
+      .setSubtitle(item.subtitle));
   }
   return CardService.newCardBuilder()
     .setHeader(CardService.newCardHeader()
@@ -50,7 +49,7 @@ function createHomeCard(parameters = {
         .addButton(CardService.newTextButton()
           .setText('Search')
           .setOnClickAction(CardService.newAction()
-            .setFunctionName('clickSearchButton')
+            .setFunctionName(clickSearchButton_.name)
             .setLoadIndicator(CardService.LoadIndicator.SPINNER))
           .setTextButtonStyle(CardService.TextButtonStyle.FILLED))))
     .addSection(CardService.newCardSection()
@@ -59,35 +58,38 @@ function createHomeCard(parameters = {
       .addWidget(CardService.newTextButton()
         .setText('More')
         .setOnClickAction(CardService.newAction()
-          .setFunctionName('clickMoreButton')
-          .setParameters({ items: JSON.stringify(items), token: files.getContinuationToken() })
+          .setFunctionName(clickMoreRecentButton_.name)
+          .setParameters({
+            items: JSON.stringify(items),
+            token: recent.nextPageToken
+          })
           .setLoadIndicator(CardService.LoadIndicator.SPINNER))
         .setTextButtonStyle(CardService.TextButtonStyle.TEXT)))
-    .setFixedFooter(buildFixedFooter({
+    .setFixedFooter(buildFixedFooter_({
       primary: false,
       secondary: true
     }))
     .build();
 }
 
-function clickSearchButton(event) {
+function clickSearchButton_(event) {
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation()
-      .pushCard(createSearchCard(event)))
+      .pushCard(createSearchCard_(event)))
     .build();
 }
 
-function createSearchCard(event) {
+function createSearchCard_(event) {
   const value = event.formInput['search'] || '';
   const grid = CardService.newGrid()
     .setNumColumns(1)
     .setOnClickAction(CardService.newAction()
-      .setFunctionName('clickSpreadsheetList')
+      .setFunctionName(clickSpreadsheetList_.name)
       .setLoadIndicator(CardService.LoadIndicator.SPINNER))
     .setBorderStyle(CardService.newBorderStyle()
       .setType(CardService.BorderType.NO_BORDER));
   if (value) {
-    const files = DriveApp.searchFiles(`mimeType contains 'spreadsheet' and fullText contains '${value}'`);
+    const files = DriveApp.searchFiles(`mimeType = 'application/vnd.google-apps.spreadsheet' and fullText contains '${value}'`);
     while (files.hasNext()) {
       const file = files.next();
       const name = file.getName();
@@ -106,49 +108,56 @@ function createSearchCard(event) {
         .setValue(value)
         .setFieldName('search')
         .setOnChangeAction(CardService.newAction()
-          .setFunctionName('changeSearchValue')
+          .setFunctionName(changeSearchValue_.name)
           .setParameters({ ...event.parameters })
           .setLoadIndicator(CardService.LoadIndicator.SPINNER))
         .setMultiline(false)))
     .addSection(CardService.newCardSection()
       .setHeader('Search Result')
       .addWidget(grid))
-    .setFixedFooter(buildFixedFooter({
+    .setFixedFooter(buildFixedFooter_({
       primary: false,
       secondary: true
     }))
     .build();
 }
 
-function changeSearchValue(event) {
+function changeSearchValue_(event) {
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation()
-      .updateCard(createSearchCard(event)))
+      .updateCard(createSearchCard_(event)))
     .build();
 }
 
-function clickMoreButton(event) {
+function clickMoreRecentButton_(event) {
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation()
-      .updateCard(createHomeCard(event.parameters)))
+      .updateCard(createHomeCard_(event.parameters)))
     .build();
 }
 
-function clickSpreadsheetList(event) {
+function clickMoreSearchButton_(event) {
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation()
-      .pushCard(fieldCodeSetting({ ...event.parameters, id: event.parameters.grid_item_identifier })))
+      .updateCard(createSearchCard_(event.parameters)))
     .build();
 }
 
-function openLinkCallback(event) {
+function clickSpreadsheetList_(event) {
+  return CardService.newActionResponseBuilder()
+    .setNavigation(CardService.newNavigation()
+      .pushCard(fieldCodeSetting_({ ...event.parameters, id: event.parameters.grid_item_identifier })))
+    .build();
+}
+
+function openLinkCallback_(event) {
   return CardService.newActionResponseBuilder()
     .setOpenLink(CardService.newOpenLink()
       .setUrl(event.parameters.url))
     .build();
 }
 
-function fieldCodeSetting(parameters) {
+function fieldCodeSetting_(parameters) {
   const spreadsheet = SpreadsheetApp.openById(parameters.id);
   const sheets = spreadsheet.getSheets();
   const sheet = spreadsheet.getSheetByName(parameters.sheetName) || sheets[0];
@@ -167,8 +176,11 @@ function fieldCodeSetting(parameters) {
     const button = CardService.newTextButton()
       .setText(sheetName)
       .setOnClickAction(CardService.newAction()
-        .setFunctionName('changeSheet')
-        .setParameters({ ...parameters, sheetName: sheetName })
+        .setFunctionName(changeSheet_.name)
+        .setParameters({
+          ...parameters,
+          sheetName: sheetName
+        })
         .setLoadIndicator(CardService.LoadIndicator.SPINNER))
       .setTextButtonStyle(CardService.TextButtonStyle.TEXT);
     if (currentSheetName === sheetName) {
@@ -185,7 +197,7 @@ function fieldCodeSetting(parameters) {
         .setSuggestions(CardService.newSuggestions()
           .addSuggestions([...(match || []), `{{${header}}}`]))
         .setOnChangeAction(CardService.newAction()
-          .setFunctionName('changeFieldCode')
+          .setFunctionName(changeFieldCode_.name)
           .setLoadIndicator(CardService.LoadIndicator.NONE))
         .setMultiline(false);
       cardSection.addWidget(textInput);
@@ -204,7 +216,7 @@ function fieldCodeSetting(parameters) {
       .setHeader('Sheets')
       .addWidget(buttonSet))
     .addSection(cardSection)
-    .setFixedFooter(buildFixedFooter({
+    .setFixedFooter(buildFixedFooter_({
       primary: true,
       secondary: true
     }, {
@@ -214,18 +226,18 @@ function fieldCodeSetting(parameters) {
     .build();
 }
 
-function changeSheet(event) {
+function changeSheet_(event) {
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation()
-      .updateCard(fieldCodeSetting(event.parameters)))
+      .updateCard(fieldCodeSetting_(event.parameters)))
     .build();
 }
 
-function changeFieldCode(arg) {
+function changeFieldCode_(arg) {
   console.log(arg);
 }
 
-function buildFixedFooter(conditions = {
+function buildFixedFooter_(conditions = {
   primary: primary = false,
   secondary: secondary = false
 }, content = {
@@ -237,23 +249,23 @@ function buildFixedFooter(conditions = {
       .setText('Merge')
       .setDisabled(!conditions.primary)
       .setOnClickAction(CardService.newAction()
-        .setFunctionName('clickMergeButton')
+        .setFunctionName(clickMergeButton_.name)
         .setParameters(content)))
     .setSecondaryButton(CardService.newTextButton()
       .setText('Back')
       .setDisabled(!conditions.secondary)
       .setOnClickAction(CardService.newAction()
-        .setFunctionName('gotoPreviousCard')));
+        .setFunctionName(gotoPreviousCard_.name)));
 }
 
-function gotoPreviousCard(event) {
+function gotoPreviousCard_(event) {
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation()
       .popCard())
     .build();
 }
 
-function clickMergeButton(event) {
+function clickMergeButton_(event) {
   const settings = event.formInput;
   const content = event.parameters;
   const template = content.template;
@@ -271,10 +283,19 @@ function clickMergeButton(event) {
 }
 
 function createMergeDocument() {
-  const template = DocumentApp.getActiveDocument();
-  const document = DocumentApp.create('[Sashikomi]' + template.getName());
-  const url = document.getUrl();
+  const templateDocument = DocumentApp.getActiveDocument();
+  const templateFile = DriveApp.getFileById(templateDocument.getId());
+  const parents = templateFile.getParents();
+  let destination = undefined;
+  if (parents.hasNext()) {
+    destination = parents.next();
+  }
+  const documentFile = templateFile.makeCopy('[Sashikomi]' + templateFile.getName(), destination);
+  const document = DocumentApp.openById(documentFile.getId());
+  const documentBody = document.getBody();
+  documentBody.clear();
   document.saveAndClose();
+  const url = documentFile.getUrl();
   return url;
 }
 
@@ -289,20 +310,25 @@ function mergeDocument(url, entry) {
   const body = templateBody.copy();
   for (const [fieldCode, text] of Object.entries(entry)) {
     body.replaceText(fieldCode, text);
+    console.log(`Replace Text: ${fieldCode}, ${text}`);
   }
   for (let i = 0; i < body.getNumChildren(); i++) {
     const child = body.getChild(i);
     switch (child.getType()) {
       case DocumentApp.ElementType.LIST_ITEM:
         documentBody.appendListItem(child.asListItem().copy());
+        console.log(`Copy ListItem`);
         break;
       case DocumentApp.ElementType.PARAGRAPH:
         documentBody.appendParagraph(child.asParagraph().copy());
+        console.log(`Copy Paragraph`);
         break;
       case DocumentApp.ElementType.TABLE:
         documentBody.appendTable(child.asTable().copy());
+        console.log(`Copy Table`);
         break;
       default:
+        console.log(`Unknown Type: ${child.getType()}`);
         break;
     }
   }
@@ -310,7 +336,7 @@ function mergeDocument(url, entry) {
   return;
 }
 
-function merge(template, entries) {
+function merge_(template, entries) {
   const merged = [];
   for (const entry of entries) {
     merged.push(template.replace(/{{[^{}]+?}}/g, (match) => {
@@ -318,4 +344,41 @@ function merge(template, entries) {
     }));
   }
   return merged;
+}
+
+function getRecentSpreadsheets_(token = null) {
+  const options = {
+    corpora: 'allDrives',
+    includeItemsFromAllDrives: true,
+    orderBy: 'viewedByMeTime desc',
+    pageSize: 10,
+    q: `trashed = false and mimeType = 'application/vnd.google-apps.spreadsheet'`,
+    supportsAllDrives: true,
+  };
+
+  if (token) {
+    options.pageToken = token;
+  }
+
+  const page = Drive.Files.list(options);
+
+  return page;
+}
+
+function searchSpreadsheets_(value = '', token = null) {
+  const options = {
+    corpora: 'allDrives',
+    includeItemsFromAllDrives: true,
+    pageSize: 10,
+    q: `trashed = false and mimeType = 'application/vnd.google-apps.spreadsheet' and fullText contains '${value}'`,
+    supportsAllDrives: true,
+  };
+
+  if (token) {
+    options.pageToken = token;
+  }
+
+  const page = Drive.Files.list(options);
+
+  return page;
 }

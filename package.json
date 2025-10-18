@@ -3,7 +3,7 @@
     "create": "clasp create --type standalone | clasp push -f"
   },
   "devDependencies": {
-    "@google/clasp": "^2.4.2",
-    "@types/google-apps-script": "^1.0.78"
+    "@google/clasp": "^3.1.0",
+    "@types/google-apps-script": "^2.0.5"
   }
 }
