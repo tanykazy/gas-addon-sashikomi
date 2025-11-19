@@ -2,15 +2,16 @@
  * @OnlyCurrentDoc
  */
 
-
 function onHomepage(event) {
   return createHomeCard_();
 }
 
-function createHomeCard_(parameters = {
-  items: items = '[]',
-  token: null
-}) {
+function createHomeCard_(parameters) {
+  parameters = Object.assign({
+    items: '[]',
+    token: null
+  }, parameters);
+
   const items = JSON.parse(parameters['items']);
   const grid = CardService.newGrid()
     .setNumColumns(1)
@@ -43,7 +44,7 @@ function createHomeCard_(parameters = {
   }
   return CardService.newCardBuilder()
     .setHeader(CardService.newCardHeader()
-      .setTitle('Select database'))
+      .setTitle('Select Sheet'))
     .addSection(CardService.newCardSection()
       .addWidget(CardService.newButtonSet()
         .addButton(CardService.newTextButton()
@@ -109,7 +110,9 @@ function createSearchCard_(event) {
         .setFieldName('search')
         .setOnChangeAction(CardService.newAction()
           .setFunctionName(changeSearchValue_.name)
-          .setParameters({ ...event.parameters })
+          .setParameters({
+            ...event.parameters
+          })
           .setLoadIndicator(CardService.LoadIndicator.SPINNER))
         .setMultiline(false)))
     .addSection(CardService.newCardSection()
@@ -146,7 +149,10 @@ function clickMoreSearchButton_(event) {
 function clickSpreadsheetList_(event) {
   return CardService.newActionResponseBuilder()
     .setNavigation(CardService.newNavigation()
-      .pushCard(fieldCodeSetting_({ ...event.parameters, id: event.parameters.grid_item_identifier })))
+      .pushCard(fieldCodeSetting_({
+        ...event.parameters,
+        id: event.parameters.grid_item_identifier
+      })))
     .build();
 }
 
@@ -158,44 +164,55 @@ function openLinkCallback_(event) {
 }
 
 function fieldCodeSetting_(parameters) {
-  const spreadsheet = SpreadsheetApp.openById(parameters.id);
-  const sheets = spreadsheet.getSheets();
-  const sheet = spreadsheet.getSheetByName(parameters.sheetName) || sheets[0];
-  const range = sheet.getDataRange();
-  const values = range.getDisplayValues();
-  const headers = values[0];
-  const cardSection = CardService.newCardSection()
-    .setHeader('Field Code');
-  const document = DocumentApp.getActiveDocument();
-  const text = document.getBody().getText();
-  const match = text.match(/{{[^{}]+?}}/g);
+  const spreadsheet = getSpreadsheet_(parameters.id);
+  spreadsheet.sheets.sort((a, b) => a.properties.index - b.properties.index);
+  let currentSheet = spreadsheet.sheets[0];
+  if (parameters.sheetId) {
+    for (const sheet of spreadsheet.sheets) {
+      if (parameters.sheetId === sheet.properties.sheetId.toString()) {
+        currentSheet = sheet;
+        break;
+      }
+    }
+  }
+  const sheetData = getSheetsDataByFilters_(spreadsheet.spreadsheetId, {
+    gridRange: {
+      sheetId: currentSheet.properties.sheetId,
+      startRowIndex: 0,
+      endRowIndex: 1,
+    }
+  });
   const buttonSet = CardService.newButtonSet();
-  const currentSheetName = sheet.getName();
-  for (let i = 0; i < sheets.length; i++) {
-    const sheetName = sheets[i].getName();
+  for (const sheet of spreadsheet.sheets) {
     const button = CardService.newTextButton()
-      .setText(sheetName)
+      .setText(sheet.properties.title)
       .setOnClickAction(CardService.newAction()
         .setFunctionName(changeSheet_.name)
         .setParameters({
           ...parameters,
-          sheetName: sheetName
+          sheetName: sheet.properties.title,
+          sheetId: JSON.stringify(sheet.properties.sheetId),
         })
         .setLoadIndicator(CardService.LoadIndicator.SPINNER))
       .setTextButtonStyle(CardService.TextButtonStyle.TEXT);
-    if (currentSheetName === sheetName) {
+    if (currentSheet.properties.sheetId === sheet.properties.sheetId) {
       button.setDisabled(true);
     }
     buttonSet.addButton(button);
   }
-  for (const header of headers) {
-    if (header) {
+
+  const cardSection = CardService.newCardSection()
+    .setHeader('Field Code');
+  for (const headerValue of sheetData.sheets[0].data[0].rowData[0].values) {
+    if (headerValue.formattedValue) {
       const textInput = CardService.newTextInput()
-        .setTitle(header)
-        .setFieldName(header)
-        .setValue(`{{${header}}}`)
+        .setTitle(headerValue.formattedValue)
+        .setFieldName(headerValue.formattedValue)
+        .setValue(`{{${headerValue.formattedValue}}}`)
         .setSuggestions(CardService.newSuggestions()
-          .addSuggestions([...(match || []), `{{${header}}}`]))
+          .addSuggestions([
+            `{{${headerValue.formattedValue}}}`,
+          ]))
         .setOnChangeAction(CardService.newAction()
           .setFunctionName(changeFieldCode_.name)
           .setLoadIndicator(CardService.LoadIndicator.NONE))
@@ -208,8 +225,8 @@ function fieldCodeSetting_(parameters) {
       .setOpenLink(CardService.newOpenLink()
         .setOpenAs(CardService.OpenAs.OVERLAY)
         .setOnClose(CardService.OnClose.NOTHING)
-        .setUrl(spreadsheet.getUrl()))
-      .setText(`Open ${spreadsheet.getName()}`))
+        .setUrl(spreadsheet.spreadsheetUrl))
+      .setText(`Open ${spreadsheet.properties.title}`))
     .setHeader(CardService.newCardHeader()
       .setTitle('Match the field name'))
     .addSection(CardService.newCardSection()
@@ -220,8 +237,8 @@ function fieldCodeSetting_(parameters) {
       primary: true,
       secondary: true
     }, {
-      data: JSON.stringify(values),
-      template: text
+      spreadsheet: JSON.stringify(spreadsheet),
+      sheet: JSON.stringify(currentSheet),
     }))
     .build();
 }
@@ -237,20 +254,19 @@ function changeFieldCode_(arg) {
   console.log(arg);
 }
 
-function buildFixedFooter_(conditions = {
-  primary: primary = false,
-  secondary: secondary = false
-}, content = {
-  data: data = '',
-  template: template = ''
-}) {
+function buildFixedFooter_(conditions, context) {
+  conditions = Object.assign({
+    primary: false,
+    secondary: false
+  }, conditions);
+
   return CardService.newFixedFooter()
     .setPrimaryButton(CardService.newTextButton()
       .setText('Merge')
       .setDisabled(!conditions.primary)
       .setOnClickAction(CardService.newAction()
         .setFunctionName(clickMergeButton_.name)
-        .setParameters(content)))
+        .setParameters(context)))
     .setSecondaryButton(CardService.newTextButton()
       .setText('Back')
       .setDisabled(!conditions.secondary)
@@ -267,83 +283,141 @@ function gotoPreviousCard_(event) {
 
 function clickMergeButton_(event) {
   const settings = event.formInput;
-  const content = event.parameters;
-  const template = content.template;
-  const data = JSON.parse(content.data);
-  const ui = DocumentApp.getUi();
+
   const htmlTemplate = HtmlService.createTemplateFromFile('ModalDialog');
-  htmlTemplate.data = JSON.stringify(data);
+  htmlTemplate.spreadsheet = event.parameters.spreadsheet;
+  htmlTemplate.sheet = event.parameters.sheet;
   htmlTemplate.settings = JSON.stringify(settings);
-  htmlTemplate.template = JSON.stringify(template);
-  ui.showModalDialog(htmlTemplate.evaluate(), 'sashikomi');
+
+  const htmlOutput = htmlTemplate.evaluate();
+  htmlOutput.setSandboxMode(HtmlService.SandboxMode.IFRAME)
+  htmlOutput.setWidth(800)
+  htmlOutput.setHeight(600)
+  htmlOutput.addMetaTag("viewport", "width=device-width, initial-scale=1");
+
+  const ui = DocumentApp.getUi();
+  ui.showModalDialog(htmlOutput, 'Sashikomi');
+
   return CardService.newActionResponseBuilder()
     .setNotification(CardService.newNotification()
       .setText('Merging...'))
     .build();
 }
 
-function createMergeDocument() {
-  const templateDocument = DocumentApp.getActiveDocument();
-  const templateFile = DriveApp.getFileById(templateDocument.getId());
-  const parents = templateFile.getParents();
-  let destination = undefined;
-  if (parents.hasNext()) {
-    destination = parents.next();
+function createTargetFolder(templateDocumentId) {
+  const templateDocument = DriveApp.getFileById(templateDocumentId);
+  const parentFolders = getParentsFolders_(templateDocument);
+  const availableFolders = selectAvailableFolders_(parentFolders);
+  const availableFolder = availableFolders[0];
+  if (availableFolders.length > 1) {
+    console.log('Multiple available folders found. Using the first one.');
   }
-  const documentFile = templateFile.makeCopy('[Sashikomi]' + templateFile.getName(), destination);
-  const document = DocumentApp.openById(documentFile.getId());
-  const documentBody = document.getBody();
-  documentBody.clear();
-  document.saveAndClose();
-  const url = documentFile.getUrl();
-  return url;
+  const targetFolder = DriveApp.createFolder(`[Sashikomi]${templateDocument.getName()}`);
+  targetFolder.moveTo(availableFolder);
+
+  return {
+    name: targetFolder.getName(),
+    url: targetFolder.getUrl(),
+    id: targetFolder.getId(),
+  };
 }
 
-function mergeDocument(url, entry) {
-  const template = DocumentApp.getActiveDocument();
-  const document = DocumentApp.openByUrl(url);
-  const documentBody = document.getBody();
-  const templateBody = template.getBody();
-  // const templateHeader = template.getHeader();
-  // const templateFooter = template.getFooter();
-  // const templateFootnotes = template.getFootnotes();
-  const body = templateBody.copy();
-  for (const [fieldCode, text] of Object.entries(entry)) {
-    body.replaceText(fieldCode, text);
-    console.log(`Replace Text: ${fieldCode}, ${text}`);
+function createMergeDocument(templateDocumentId, targetFolderId, name) {
+  const templateFile = DriveApp.getFileById(templateDocumentId);
+  const targetFolder = DriveApp.getFolderById(targetFolderId);
+  const mergeFile = templateFile.makeCopy(name, targetFolder);
+  const url = mergeFile.getUrl();
+  const mergeDocument = Docs.Documents.get(mergeFile.getId(), {
+    includeTabsContent: false,
+  });
+  return {
+    url: url,
+    document: mergeDocument,
+  };
+}
+
+function replaceMergeDocument(documentId, revisionId, replaceAllTextRequests) {
+  const response = Docs.Documents.batchUpdate({
+    requests: replaceAllTextRequests,
+    writeControl: {
+      requiredRevisionId: revisionId,
+    }
+  }, documentId);
+  return response;
+}
+
+function getTemplateDocument() {
+  const activeDocument = DocumentApp.getActiveDocument();
+  const templateDocument = Docs.Documents.get(activeDocument.getId(), {
+    includeTabsContent: false,
+  });
+  return templateDocument;
+}
+
+function getSheetsData(spreadsheetId, sheetName) {
+  const fields = 'sheets(data(rowData(values(formattedValue))))';
+
+  return Sheets.Spreadsheets.get(spreadsheetId, {
+    fields: fields,
+    ranges: [sheetName],
+    includeGridData: true,
+    excludeTablesInBandedRanges: false,
+  });
+}
+
+function getParentsFolders_(file) {
+  const parentFolders = [];
+  const folders = file.getParents();
+  while (folders.hasNext()) {
+    const folder = folders.next();
+    parentFolders.push(folder);
   }
-  for (let i = 0; i < body.getNumChildren(); i++) {
-    const child = body.getChild(i);
-    switch (child.getType()) {
-      case DocumentApp.ElementType.LIST_ITEM:
-        documentBody.appendListItem(child.asListItem().copy());
-        console.log(`Copy ListItem`);
-        break;
-      case DocumentApp.ElementType.PARAGRAPH:
-        documentBody.appendParagraph(child.asParagraph().copy());
-        console.log(`Copy Paragraph`);
-        break;
-      case DocumentApp.ElementType.TABLE:
-        documentBody.appendTable(child.asTable().copy());
-        console.log(`Copy Table`);
-        break;
-      default:
-        console.log(`Unknown Type: ${child.getType()}`);
-        break;
+  if (parentFolders.length === 0) {
+    parentFolders.push(DriveApp.getRootFolder());
+  }
+
+  return parentFolders;
+}
+
+function selectAvailableFolders_(folders) {
+  const user = Session.getActiveUser();
+  const availableFolders = [];
+  for (const folder of folders) {
+    const permission = folder.getAccess(user);
+    if (permission === DriveApp.Permission.EDIT ||
+      permission === DriveApp.Permission.OWNER ||
+      permission === DriveApp.Permission.ORGANIZER ||
+      permission === DriveApp.Permission.FILE_ORGANIZER) {
+      availableFolders.push(folder);
+    } else {
+      console.log(`No permission to write: ${folder.getName()}`);
     }
   }
-  document.saveAndClose();
-  return;
+  if (availableFolders.length === 0) {
+    availableFolders.push(DriveApp.getRootFolder());
+  }
+
+  return availableFolders;
 }
 
-function merge_(template, entries) {
-  const merged = [];
-  for (const entry of entries) {
-    merged.push(template.replace(/{{[^{}]+?}}/g, (match) => {
-      return entry[match];
-    }));
-  }
-  return merged;
+function getSpreadsheet_(spreadsheetId) {
+  const fields = 'spreadsheetId,spreadsheetUrl,properties,sheets(properties(sheetId,title,index,sheetType,gridProperties))';
+
+  return Sheets.Spreadsheets.get(spreadsheetId, {
+    fields: fields,
+    includeGridData: false,
+    excludeTablesInBandedRanges: false,
+  });
+}
+
+function getSheetsDataByFilters_(spreadsheetId, ...dataFilters) {
+  return Sheets.Spreadsheets.getByDataFilter({
+    dataFilters: [
+      ...dataFilters,
+    ],
+    includeGridData: true,
+    excludeTablesInBandedRanges: false,
+  }, spreadsheetId);
 }
 
 function getRecentSpreadsheets_(token = null) {
@@ -351,7 +425,7 @@ function getRecentSpreadsheets_(token = null) {
     corpora: 'allDrives',
     includeItemsFromAllDrives: true,
     orderBy: 'viewedByMeTime desc',
-    pageSize: 10,
+    pageSize: 5,
     q: `trashed = false and mimeType = 'application/vnd.google-apps.spreadsheet'`,
     supportsAllDrives: true,
   };
