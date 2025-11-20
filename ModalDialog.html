@@ -279,10 +279,9 @@
               }
             }
           }
+
           this.mdcDataTable.initialSyncWithDOM();
           this.mdcDataTable.setSelectedRowIds(selectRowIds);
-
-          console.log(this.mdcDataTable);
         }
 
         buildMergeData(selectedRowId) {
@@ -353,6 +352,12 @@
                   const mdcIcon = mdcIconButton.firstChild;
                   mdcIcon.innerText = "open_in_new";
 
+                  this.mdcDataTable.setSelectedRowIds(
+                    this.mdcDataTable
+                      .getSelectedRowIds()
+                      .filter((rowId) => rowId !== selectedRowId)
+                  );
+
                   this.progress--;
                   if (this.progress === 0) {
                     this.mdcDataTable.hideProgress();
@@ -389,10 +394,26 @@
         }
 
         mergeDocuments(selectedRowIds) {
+          if (this.targetFolder) {
+            for (const selectedRowId of selectedRowIds) {
+              const mergeData = this.buildMergeData(selectedRowId);
+
+              this.createAndReplaceMergeDocument(
+                selectedRowId,
+                this.templateDocument,
+                targetFolder.id,
+                mergeData
+              );
+            }
+
+            return;
+          }
+
           this.progress++;
           if (this.progress > 0) {
             this.mdcDataTable.showProgress();
           }
+
           google.script.run
             .withSuccessHandler((targetFolder) => {
               this.targetFolder = targetFolder;
@@ -449,6 +470,31 @@
         }
       }
       customElements.define("sashikomi-view", SashikomiView);
+
+      function googleScriptRun(name, ...args) {
+        return new Promise(function (resolve, reject) {
+          console.log(
+            `Executes the server-side Apps Script function "${name}"`,
+            args
+          );
+          google.script.run
+            .withSuccessHandler(function (...e) {
+              console.log(
+                `The server-side function "${name}" returns successfully.`,
+                e
+              );
+              resolve(...e);
+            })
+            .withFailureHandler(function (...e) {
+              console.log(
+                `The server-side function "${name}" throws an exception.`,
+                e
+              );
+              reject(...e);
+            })
+            [name](...args);
+        });
+      }
 
       function createMdcCheckbox() {
         const checkboxDiv = document.createElement("div");
